@@ -1,0 +1,12 @@
+langgraph
+langchain
+langchain-ollama
+
+duckduckgo-search
+
+httpx
+beautifulsoup4
+
+python-dotenv
+pydantic
+tenacity
