@@ -16,7 +16,7 @@ def main():
     else:
         question = input("Question: ").strip()          #For interactive behaviour
 
-    state : AgentState{
+    state : AgentState = {
         "question" : question,
         "plan" : "",
         "research_enabled" : os.getenv("RESEARCH_ENABLED", "1") == "1",
