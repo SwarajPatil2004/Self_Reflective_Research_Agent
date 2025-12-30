@@ -47,5 +47,5 @@ def main():
         print(f"[{s['id']}] {s['title']} {s['url']}")
 
 
-if __name__ = "__main__"
-main()
+if __name__ == "__main__":
+    main()
