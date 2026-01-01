@@ -6,7 +6,8 @@ class BudgetGuard:
     def __init__(self):
         self.max_search_calls = env_int("BUDGET_MAX_SEARCH_CALLS", 6)
         self.max_pages_fetched = env_int("BUDGET_MAX_PAGES_FETCHED", 6)
-        self.max_token_estimate = env_int("BUDGET_MAX_TOKEN_ESTIMATE", 24000)
+        self.max_token_estimate = env_int("BUDGET_MAX_TOKEN_ESTIMATE", 12000)
+        print("DEBUG max_pages_fetched=", self.max_pages_fetched)
 
     def add_tokens(self, state, text: str, reason: str):
         inc = rough_token_estimation(text)
@@ -19,10 +20,13 @@ class BudgetGuard:
         if state["budget"]["search_calls"] > self.max_search_calls:
             self.stop(state, "Maximum search calls limit exceeded.")
 
-    def fetch(self, state):
+    def inc_fetch(self, state):
         state["budget"]["pages_fetched"] += 1
         if state["budget"]["pages_fetched"] > self.max_pages_fetched:
-            self.stop(state, "Maximum pages fetch limit exceeded.")
+            self.stop(state, "Page fetch limit exceeded.")
+
+    def can_fetch_more(self, state) -> bool:
+        return state["budget"]["pages_fetched"] < self.max_pages_fetched
 
     def stop(self, state, why: str):
         state["budget"]["stopped"] = True
