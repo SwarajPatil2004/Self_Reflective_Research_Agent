@@ -2,7 +2,7 @@ langgraph
 langchain
 langchain-ollama
 
-duckduckgo-search
+ddgs
 
 httpx
 beautifulsoup4
