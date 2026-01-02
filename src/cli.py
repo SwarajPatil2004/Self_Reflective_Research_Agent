@@ -1,13 +1,14 @@
 import os
 import sys
 
-from dotenv import load_dotenv
-from agent.graph import build_graph
-from agent.state import AgentState
+from dotenv import load_dotenv, find_dotenv
+
+from src.agent.graph import build_graph
+from src.agent.state import AgentState
 
 def main():
 
-    load_dotenv()
+    load_dotenv(find_dotenv(usecwd=True), override=True)
     graph = build_graph()
 
     if len(sys.argv) > 1:
@@ -39,13 +40,19 @@ def main():
 
     out = graph.invoke(state)
 
-    print("----- Result -----")
-    print(out.get("draft") or out.get("revision") or "")
+    final_text = out.get("draft") or out.get("revision") or ""
 
-    print("----- Sources -----")
-    for s in out.get("sources",[]):
-        print(f"[{s['id']}] {s['title']} {s['url']}")
+    sources = out.get("sources", [])
+    if sources:
+        refs = "\n".join([f"- [{s['id']}] {s['title']} — {s['url']}" for s in sources])
+        final_text += "\n\n## References\n" + refs
 
+    print("\n----- Result -----\n")
+    print(final_text)
+
+
+    print("\n----- BUDGET -----")
+    print(out["budget"])
 
 if __name__ == "__main__":
     main()
