@@ -9,6 +9,7 @@ Return only the plan.
 """
 
 RESEARCH_PROMPT = """You are a research synthesis module.
+- Use ONLY the provided sources and ONLY these citation markers: [S1]...[S{N}].
 Given the user question, plan, and a list of sources (snippets + fetched text), write concise notes:
 - key findings
 - disagreements/uncertainty
@@ -18,15 +19,20 @@ Return only research notes.
 """
 
 DRAFT_PROMPT = """You are the drafting module.
-Write a helpful, structured answer.
+Write a helpful, structured answer in Markdown.
 
-Rules:
-- If research_enabled is true: include inline citations like [S1], [S2] next to factual claims.
-- If research_enabled is false OR budget stopped: do NOT over-claim.
-  - Clearly label uncertainty.
-  - Add a "How to verify" section with practical steps.
+Hard rules:
+- Use ONLY the provided sources and ONLY these citation markers: [S1]...[S{N}].
+- Do NOT invent sources, titles, authors, years, or citation IDs.
+- Do NOT include a "References" section at the end (the system will add it).
+- If research_enabled is true:
+  - Do NOT include a "How to verify" section.
+  - Every factual claim that depends on external info must have an inline citation on the same sentence.
+- If research_enabled is false:
+  - Do NOT over-claim; clearly state uncertainty.
+  - MUST include a "How to verify" section with practical steps.
 
-Return the full draft.
+Return only the draft answer (no preamble like "Here is the draft").
 """
 
 CRITIQUE_PROMPT = """You are the critique module (Reflexion).
@@ -43,12 +49,17 @@ Return:
 """
 
 REVISE_PROMPT = """You are the revision module.
-Apply the critique fixes to improve the draft.
+Revise the draft using the critique.
 
-Rules:
-- Keep it concise.
-- Add/adjust citations [S#] where needed (same line as the claim).
-- If research is disabled/blocked, add uncertainty + verification steps.
+Hard rules:
+- Use ONLY the provided sources and ONLY these citation markers: [S1]...[S{N}].
+- Do NOT invent sources, titles, authors, years, or citation IDs.
+- Do NOT include a "References" section at the end (the system will add it).
+- If research_enabled is true:
+  - Remove any "How to verify" section if present.
+  - Ensure every externally-sourced factual claim has an inline citation.
+- If research_enabled is false:
+  - Keep uncertainty language and include "How to verify".
 
-Return the revised draft only.
+Return only the revised draft (no extra commentary).
 """
