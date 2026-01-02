@@ -68,16 +68,6 @@ def research_node(state: AgentState) -> AgentState:
         for r in ddgs.text(state["question"], region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results):
             results.append(r)
 
-    # sources: List[Source] = []
-    # for i, r in enumerate(results, start=1):
-    #     sources.append({
-    #         "id": f"S{i}",
-    #         "url": r.get("href", ""),
-    #         "title": r.get("title", "") or f"Result {i}",
-    #         "snippet": r.get("body", "") or "",
-    #     })
-    # state["sources"] = sources
-
     existing_sources = state.get("sources", [])
     existing_urls = {s["url"] for s in existing_sources}
     next_id = 1
@@ -148,27 +138,6 @@ def research_node(state: AgentState) -> AgentState:
     state["notes"] = llm.invoke(prompt).content
     bg.add_tokens(state, state["notes"], "research notes output")
     return state
-
-# def draft_node(state: AgentState) -> AgentState:
-#     llm = _llm()
-#     bg = BudgetGuard()
-
-#     context = ""
-#     if state["research_enabled"] and state["sources"] and state["notes"] and not bg.is_stopped(state):
-#         context = f"Research notes:\n{state['notes']}\n\nSources:\n" + "\n".join(
-#             f"[{s['id']}] {s['title']} — {s['url']}" for s in state["sources"]
-#         )
-#     else:
-#         context = "Research unavailable/blocked. Be cautious and include verification steps."
-
-#     prompt = f"{DRAFT_PROMPT}\n\nQuestion:\n{state['question']}\n\n{context}\n"
-#     bg.add_tokens(state, prompt, "draft prompt")
-#     # if bg.is_stopped(state):
-#     #     state["draft"] = "Budget stopped before drafting. Provide a cautious outline and verification steps."
-#     #     return state
-
-#     if bg.is_stopped(state):
-#         state["research_enabled"] = False  # force cautious mode
 
 def draft_node(state: AgentState) -> AgentState:
     llm = _llm()
