@@ -13,7 +13,7 @@ class BudgetState(TypedDict):
     pages_fetched : int
     token_estimate : int
     stopped : bool
-    reason : List[str]
+    reasons : List[str]
 
 class AgentState(TypedDict):
     # Main state objects passed around the graph

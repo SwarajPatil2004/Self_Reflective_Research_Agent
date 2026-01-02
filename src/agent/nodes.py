@@ -3,20 +3,26 @@ from typing import List
 import httpx
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_fixed
-from duckduckgo_search import DDGS
-from langchain_ollama import ChatOllama
+from ddgs import DDGS
 
 from .state import AgentState, Source
 from .prompts import PLANNER_PROMPT, RESEARCH_PROMPT, DRAFT_PROMPT, CRITIQUE_PROMPT, REVISE_PROMPT
 from .guards import BudgetGuard, QualityGate
 from .utils import env_int, env_float
 
-def _llm() -> ChatOllama:
-    return ChatOllama(
-        model=os.getenv("OLLAMA_MODEL", "llama3.1:8b-instruct-q4_K_M"),
-        base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
-        temperature=env_float("OLLAMA_TEMPERATURE", 0.2),
-    )
+_LLM = None
+
+def _llm():
+    global _LLM
+    if _LLM is None:
+        from langchain_ollama import ChatOllama
+        _LLM = ChatOllama(
+            model=os.getenv("OLLAMA_MODEL", "llama3.1:8b-instruct-q4_K_M"),
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+            temperature=env_float("OLLAMA_TEMPERATURE", 0.2),
+        )
+    return _LLM
+
 
 @retry(stop=stop_after_attempt(2), wait=wait_fixed(1))
 def fetch_page_text(url: str, timeout: int, max_chars: int) -> str:
@@ -62,42 +68,72 @@ def research_node(state: AgentState) -> AgentState:
         for r in ddgs.text(state["question"], region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results):
             results.append(r)
 
-    sources: List[Source] = []
-    for i, r in enumerate(results, start=1):
-        sources.append({
-            "id": f"S{i}",
-            "url": r.get("href", ""),
-            "title": r.get("title", "") or f"Result {i}",
-            "snippet": r.get("body", "") or "",
-        })
-    state["sources"] = sources
+    # sources: List[Source] = []
+    # for i, r in enumerate(results, start=1):
+    #     sources.append({
+    #         "id": f"S{i}",
+    #         "url": r.get("href", ""),
+    #         "title": r.get("title", "") or f"Result {i}",
+    #         "snippet": r.get("body", "") or "",
+    #     })
+    # state["sources"] = sources
+
+    existing_sources = state.get("sources", [])
+    existing_urls = {s["url"] for s in existing_sources}
+    next_id = 1
+    if existing_sources:
+        # Calculate next ID based on existing ones
+        start_ids = [int(s["id"][1:]) for s in existing_sources if s["id"].startswith("S") and s["id"][1:].isdigit()]
+        if start_ids:
+            next_id = max(start_ids) + 1
+    new_sources = []
+    for r in results:
+        url = r.get("href", "")
+        if url not in existing_urls:
+            new_sources.append({
+                "id": f"S{next_id}",
+                "url": url,
+                "title": r.get("title", "") or f"Result {next_id}",
+                "snippet": r.get("body", "") or "",
+            })
+            existing_urls.add(url)
+            next_id += 1
+    state["sources"] = existing_sources + new_sources
 
     # 2) Fetch a small number of pages
     timeout = env_int("HTTP_TIMEOUT_SECS", 15)
     max_chars = env_int("BUDGET_MAX_CHARS_PER_PAGE", 12000)
 
     fetched_blocks = []
-    for s in state["sources"][: env_int("BUDGET_MAX_PAGES_FETCHED", 6)]:
+    for s in state["sources"]:
         if bg.is_stopped(state):
             break
+
+        if not bg.can_fetch_more(state):
+            bg.stop(state, "Page fetch limit exceeded.")
+            break
+
         if not s["url"]:
             continue
 
         bg.inc_fetch(state)
-        if bg.is_stopped(state):
-            break
 
         try:
             text = fetch_page_text(s["url"], timeout=timeout, max_chars=max_chars)
-            fetched_blocks.append(f"[{s['id']}] {s['title']}\nURL: {s['url']}\nEXTRACT:\n{text}\n")
+            fetched_blocks.append(
+                f"[{s['id']}] {s['title']}\nURL: {s['url']}\nEXTRACT:\n{text}\n"
+            )
             bg.add_tokens(state, text, f"fetch {s['id']}")
         except Exception:
-            fetched_blocks.append(f"[{s['id']}] {s['title']}\nURL: {s['url']}\nEXTRACT: (failed to fetch)\n")
+            fetched_blocks.append(
+                f"[{s['id']}] {s['title']}\nURL: {s['url']}\nEXTRACT: (failed to fetch)\n"
+            )
 
     # 3) Synthesize notes
     llm = _llm()
+    n_sources = len(state.get("sources", []))
     prompt = (
-        f"{RESEARCH_PROMPT}\n\n"
+        f"{RESEARCH_PROMPT.replace('{N}', str(n_sources))}\n\n"
         f"Question: {state['question']}\n\n"
         f"Plan:\n{state['plan']}\n\n"
         f"Sources (snippets):\n" +
@@ -113,27 +149,51 @@ def research_node(state: AgentState) -> AgentState:
     bg.add_tokens(state, state["notes"], "research notes output")
     return state
 
+# def draft_node(state: AgentState) -> AgentState:
+#     llm = _llm()
+#     bg = BudgetGuard()
+
+#     context = ""
+#     if state["research_enabled"] and state["sources"] and state["notes"] and not bg.is_stopped(state):
+#         context = f"Research notes:\n{state['notes']}\n\nSources:\n" + "\n".join(
+#             f"[{s['id']}] {s['title']} — {s['url']}" for s in state["sources"]
+#         )
+#     else:
+#         context = "Research unavailable/blocked. Be cautious and include verification steps."
+
+#     prompt = f"{DRAFT_PROMPT}\n\nQuestion:\n{state['question']}\n\n{context}\n"
+#     bg.add_tokens(state, prompt, "draft prompt")
+#     # if bg.is_stopped(state):
+#     #     state["draft"] = "Budget stopped before drafting. Provide a cautious outline and verification steps."
+#     #     return state
+
+#     if bg.is_stopped(state):
+#         state["research_enabled"] = False  # force cautious mode
+
 def draft_node(state: AgentState) -> AgentState:
     llm = _llm()
     bg = BudgetGuard()
 
-    context = ""
-    if state["research_enabled"] and state["sources"] and state["notes"] and not bg.is_stopped(state):
-        context = f"Research notes:\n{state['notes']}\n\nSources:\n" + "\n".join(
-            f"[{s['id']}] {s['title']} — {s['url']}" for s in state["sources"]
+    # If budget stopped earlier (e.g., during research), still draft but disable research mode.
+    if bg.is_stopped(state):
+        state["research_enabled"] = False
+
+    if state["research_enabled"] and state["sources"] and state["notes"]:
+        context = (
+            f"Research notes:\n{state['notes']}\n\nSources:\n"
+            + "\n".join(f"[{s['id']}] {s['title']} — {s['url']}" for s in state["sources"])
         )
     else:
         context = "Research unavailable/blocked. Be cautious and include verification steps."
 
-    prompt = f"{DRAFT_PROMPT}\n\nQuestion:\n{state['question']}\n\n{context}\n"
+    n_sources = len(state.get("sources", []))
+    prompt = f"{DRAFT_PROMPT.replace('{N}', str(n_sources))}\n\nQuestion:\n{state['question']}\n\n{context}\n"
     bg.add_tokens(state, prompt, "draft prompt")
-    if bg.is_stopped(state):
-        state["draft"] = "Budget stopped before drafting. Provide a cautious outline and verification steps."
-        return state
 
     state["draft"] = llm.invoke(prompt).content
     bg.add_tokens(state, state["draft"], "draft output")
     return state
+
 
 def critique_node(state: AgentState) -> AgentState:
     llm = _llm()
@@ -162,7 +222,8 @@ def revise_node(state: AgentState) -> AgentState:
     llm = _llm()
     bg = BudgetGuard()
 
-    prompt = f"{REVISE_PROMPT}\n\nDraft:\n{state['draft']}\n\nCritique:\n{state['critique']}\n"
+    n_sources = len(state.get("sources", []))
+    prompt = f"{REVISE_PROMPT.replace('{N}', str(n_sources))}\n\nDraft:\n{state['draft']}\n\nCritique:\n{state['critique']}\n"
     bg.add_tokens(state, prompt, "revise prompt")
     if bg.is_stopped(state):
         state["revision"] = state["draft"]
