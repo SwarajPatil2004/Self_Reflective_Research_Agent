@@ -7,7 +7,6 @@ class BudgetGuard:
         self.max_search_calls = env_int("BUDGET_MAX_SEARCH_CALLS", 6)
         self.max_pages_fetched = env_int("BUDGET_MAX_PAGES_FETCHED", 6)
         self.max_token_estimate = env_int("BUDGET_MAX_TOKEN_ESTIMATE", 12000)
-        print("DEBUG max_pages_fetched=", self.max_pages_fetched)
 
     def add_tokens(self, state, text: str, reason: str):
         inc = rough_token_estimation(text)
