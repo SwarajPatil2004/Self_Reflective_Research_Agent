@@ -138,8 +138,8 @@ python -m src.cli
 ```
 
 You’ll see:
-- `--- FINAL ANSWER ---`
-- `--- SOURCES ---` (and the code appends a single clean `## References` block)
+- `----- Result -----`
+- `## References` (and the code appends a single clean block with all the sources)
 
 ---
 
