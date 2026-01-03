@@ -1,4 +1,5 @@
 import os
+import re
 from typing import List
 import httpx
 from bs4 import BeautifulSoup
@@ -6,7 +7,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 from ddgs import DDGS
 
 from .state import AgentState, Source
-from .prompts import PLANNER_PROMPT, RESEARCH_PROMPT, DRAFT_PROMPT, CRITIQUE_PROMPT, REVISE_PROMPT
+from .prompts import PLANNER_PROMPT, RESEARCH_PROMPT, DRAFT_PROMPT, CRITIQUE_PROMPT, REVISE_PROMPT, QUERY_WRITER_PROMPT
 from .guards import BudgetGuard, QualityGate
 from .utils import env_int, env_float
 
@@ -53,10 +54,17 @@ def research_node(state: AgentState) -> AgentState:
     if not state["research_enabled"] or bg.is_stopped(state):
         return state
 
-    # 1) Search (free, no key)
+    # 1) Search (dynamic query)
     bg.inc_search(state)
     if bg.is_stopped(state):
         return state
+
+    # Generate a targeted query
+    llm = _llm()
+    query_prompt = f"{QUERY_WRITER_PROMPT}\n\nQuestion: {state['question']}\nPlan: {state.get('plan','')}\nCritique: {state.get('critique','')}\n"
+    # For the first iteration, or if simple, maybe just use question? 
+    # But let's use the LLM to refine it every time.
+    search_query = llm.invoke(query_prompt).content.strip()
 
     max_results = env_int("DDG_MAX_RESULTS", 5)
     region = os.getenv("DDG_REGION", "wt-wt")
@@ -65,8 +73,14 @@ def research_node(state: AgentState) -> AgentState:
 
     results = []
     with DDGS() as ddgs:
-        for r in ddgs.text(state["question"], region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results):
-            results.append(r)
+        # Use simple error handling for empty results
+        try:
+             # Use the generated search_query
+            for r in ddgs.text(search_query, region=region, safesearch=safesearch, timelimit=timelimit, max_results=max_results):
+                results.append(r)
+        except Exception as e:
+            # Fallback to original question if query failed or returned nothing logic could be added here
+            pass
 
     existing_sources = state.get("sources", [])
     existing_urls = {s["url"] for s in existing_sources}
@@ -99,6 +113,13 @@ def research_node(state: AgentState) -> AgentState:
         if bg.is_stopped(state):
             break
 
+        # Check if we already have content
+        if s.get("content"):
+            fetched_blocks.append(
+                f"[{s['id']}] {s['title']}\nURL: {s['url']}\nEXTRACT:\n{s['content']}\n"
+            )
+            continue
+
         if not bg.can_fetch_more(state):
             bg.stop(state, "Page fetch limit exceeded.")
             break
@@ -110,6 +131,7 @@ def research_node(state: AgentState) -> AgentState:
 
         try:
             text = fetch_page_text(s["url"], timeout=timeout, max_chars=max_chars)
+            s["content"] = text # Cache it
             fetched_blocks.append(
                 f"[{s['id']}] {s['title']}\nURL: {s['url']}\nEXTRACT:\n{text}\n"
             )
@@ -160,6 +182,16 @@ def draft_node(state: AgentState) -> AgentState:
     bg.add_tokens(state, prompt, "draft prompt")
 
     state["draft"] = llm.invoke(prompt).content
+    
+    # Force cleaning of "How to Verify" if research is enabled
+    if state["research_enabled"]:
+        state["draft"] = re.sub(
+            r"(?i)(\n|^)\s*(#{1,6}|[*_]{2})\s*How to verify.*?((?=\n\s*#{1,6})|\Z)", 
+            "", 
+            state["draft"], 
+            flags=re.DOTALL
+        ).strip()
+    
     bg.add_tokens(state, state["draft"], "draft output")
     return state
 
@@ -199,6 +231,16 @@ def revise_node(state: AgentState) -> AgentState:
         return state
 
     state["revision"] = llm.invoke(prompt).content
+    
+    # Force cleaning of "How to Verify" if research is enabled
+    if state["research_enabled"]:
+        state["revision"] = re.sub(
+            r"(?i)(\n|^)\s*(#{1,6}|[*_]{2})\s*How to verify.*?((?=\n\s*#{1,6})|\Z)", 
+            "", 
+            state["revision"], 
+            flags=re.DOTALL
+        ).strip()
+
     bg.add_tokens(state, state["revision"], "revise output")
 
     # After revision, treat revision as the new draft

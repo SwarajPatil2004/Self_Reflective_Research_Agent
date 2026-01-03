@@ -7,6 +7,7 @@ class Source(TypedDict):
     url : str
     title : str
     snippet : str
+    content : str # Cached page text to avoid re-fetching
 
 class BudgetState(TypedDict):
     search_calls : int
