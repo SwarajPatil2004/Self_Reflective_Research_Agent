@@ -8,6 +8,12 @@ Constraints:
 Return only the plan.
 """
 
+QUERY_WRITER_PROMPT = """You are a search query generator.
+Given the user's question, the current plan, and any previous critique, generate a targeted search query to find missing information.
+
+Return ONLY the search query (no quotes, no preamble).
+"""
+
 RESEARCH_PROMPT = """You are a research synthesis module.
 - Use ONLY the provided sources and ONLY these citation markers: [S1]...[S{N}].
 Given the user question, plan, and a list of sources (snippets + fetched text), write concise notes:
