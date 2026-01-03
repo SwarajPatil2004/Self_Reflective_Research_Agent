@@ -141,6 +141,10 @@ You’ll see:
 - `----- Result -----`
 - `## References` (and the code appends a single clean block with all the sources)
 
+Example:
+ <img width="1636" height="929" alt="Screenshot 2026-01-02 195259" src="https://github.com/user-attachments/assets/b3785417-5814-4b7a-97e9-03ff3cb5a1fd" />
+
+
 ---
 
 ## 5) Use the Makefile (Windows)
