@@ -1,4 +1,4 @@
-#Self_Reflective_Research_Agent
+# Self_Reflective_Research_Agent
 
 ## Executive summary
 This project is a zero-cost, local “DeepResearch-like” research assistant that can search the web (free), read a few pages, write an answer, critique itself, and revise until it meets a quality bar or hits a budget limit.[1]
