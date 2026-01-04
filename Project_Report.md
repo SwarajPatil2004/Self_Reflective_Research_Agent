@@ -9,11 +9,6 @@ The key idea is a Reflexion-style loop: draft → critique → revise, implement
 People often need quick, cited explanations: “What is X?”, “Compare A vs B”, “Summarize this topic with sources”, and “List risks and best practices”.[3]
 A self-reflective loop helps reduce common problems like missing citations, overconfident claims, and messy structure by forcing a second pass that checks and repairs the answer.[3]
 
-## Personas (who uses it)
-- Student (10th–college): needs summaries and citations for a topic report.  
-- Developer: needs a quick research assistant for unfamiliar tools, with links to sources for verification.  
-- Analyst/Writer: needs drafts that are improved by critique and revision, not just a single-shot answer.  
-
 ## Scope (what it does / does not)
 ### It does
 - Creates a plan, performs free web search, fetches limited pages, synthesizes notes, drafts an answer, critiques it, and revises it in a loop.[1][3]
