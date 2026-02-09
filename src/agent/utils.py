@@ -1,6 +1,7 @@
 import os
 import re
 import math
+import httpx
 
 def env_int(name : str, default : int) -> int:
     try:
@@ -37,3 +38,16 @@ def find_numeric_claim_lines_without_cites(text: str) -> list[str]:
                 continue
             bad.append(line.strip())
     return [b for b in bad if b]
+
+def check_ollama_health(base_url: str = None) -> bool:
+    """Verifies if the Ollama server is responsive."""
+    if base_url is None:
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    
+    try:
+        # We use a short timeout for the health check
+        with httpx.Client(timeout=3.0) as client:
+            response = client.get(f"{base_url}/api/tags")
+            return response.status_code == 200
+    except Exception:
+        return False

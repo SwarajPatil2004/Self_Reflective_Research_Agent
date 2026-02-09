@@ -5,10 +5,19 @@ from dotenv import load_dotenv, find_dotenv
 
 from src.agent.graph import build_graph
 from src.agent.state import AgentState
+from src.agent.utils import check_ollama_health
 
 def main():
 
     load_dotenv(find_dotenv(usecwd=True), override=True)
+    
+    # Check Ollama health before proceeding
+    if not check_ollama_health():
+        print("\n[!] Error: Ollama server is not reachable.")
+        print("Please ensure Ollama is running (check your system tray or run 'ollama serve').")
+        print("If it's already running, check OLLAMA_BASE_URL in your .env file.")
+        sys.exit(1)
+
     graph = build_graph()
 
     if len(sys.argv) > 1:
